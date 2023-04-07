@@ -18,27 +18,25 @@ func (cs *cacheSuite) SetupTest() {
 
 func (cs *cacheSuite) TestGet() {
 	testCases := []struct {
-		testName      string
-		key           string
-		val           any
-		sleepDuration time.Duration
-		expected      any
-		ok            bool
+		desc     string
+		key      string
+		val      interface{}
+		expected interface{}
 	}{
 		{
-			testName: "Should get right value with type: int",
+			desc:     "Should get right value with type: int",
 			key:      "key",
 			val:      123456,
 			expected: 123456,
 		},
 		{
-			testName: "Should get right value with type: float",
+			desc:     "Should get right value with type: float",
 			key:      "key",
 			val:      123.456,
 			expected: 123.456,
 		},
 		{
-			testName: "Should get right value with type: string",
+			desc:     "Should get right value with type: string",
 			key:      "key",
 			val:      "123456",
 			expected: "123456",
@@ -46,53 +44,93 @@ func (cs *cacheSuite) TestGet() {
 	}
 
 	for _, tc := range testCases {
-		cs.cache.val[tc.key] = tc.val
+		cs.cache.items[tc.key] = &cacheItem{
+			val: tc.val,
+		}
 
-		actual, _ := cs.cache.Get(tc.key)
+		actual := cs.cache.Get(tc.key)
 
-		cs.Require().Equal(tc.expected, actual)
+		cs.Require().Equal(tc.expected, actual, tc.desc)
 	}
 }
 
 func (cs *cacheSuite) TestSet() {
 	testCases := []struct {
-		testName      string
-		sleepDuration time.Duration
-		key           string
-		val           any
-		expected      any
+		desc     string
+		key      string
+		val      interface{}
+		expected interface{}
 	}{
 		{
-			testName:      "Should get the same value as set",
-			sleepDuration: 0,
-			key:           "key",
-			val:           "value",
-			expected:      "value",
+			desc:     "Should get the same value as set",
+			key:      "key",
+			val:      "value",
+			expected: "value",
 		},
 		{
-			testName:      "Should get another value when overwrite with the same key",
-			sleepDuration: 0,
-			key:           "key",
-			val:           "value",
-			expected:      "value",
-		},
-		{
-			testName:      "Should not get the value when expired",
-			sleepDuration: 31,
-			key:           "key",
-			val:           "value",
-			expected:      nil,
+			desc:     "Should get another value when overwrite with the same key",
+			key:      "key",
+			val:      "value2",
+			expected: "value2",
 		},
 	}
 
 	for _, tc := range testCases {
 		cs.cache.Set(tc.key, tc.val)
 
-		time.Sleep(tc.sleepDuration * time.Second)
+		item := cs.cache.items[tc.key]
 
-		actual := cs.cache.val[tc.key]
+		cs.Require().Equal(tc.expected, item.val, tc.desc)
+	}
+}
 
-		cs.Require().Equal(tc.expected, actual)
+func (cs *cacheSuite) TestSetOnTimerExpired() {
+	testCases := []struct {
+		desc     string
+		key      string
+		val      interface{}
+		duration time.Duration
+	}{
+		{
+			desc:     "Should get nil when item expired",
+			key:      "key",
+			val:      "value",
+			duration: 31,
+		},
+	}
+
+	for _, tc := range testCases {
+		cs.cache.Set(tc.key, tc.val)
+
+		time.Sleep(tc.duration * time.Second)
+
+		_, ok := cs.cache.items[tc.key]
+
+		cs.Require().False(ok, tc.desc)
+	}
+}
+
+func (cs *cacheSuite) TestSetOnTimerReset() {
+	testCases := []struct {
+		desc string
+		key  string
+		val  interface{}
+	}{
+		{
+			desc: "Should reset timer when overwrite with the same key",
+			key:  "key",
+			val:  "value",
+		},
+	}
+
+	for _, tc := range testCases {
+		cs.cache.Set(tc.key, tc.val)
+		oldTimer := &cs.cache.items[tc.key].timer
+
+		cs.cache.Set(tc.key, tc.val)
+		newTimer := &cs.cache.items[tc.key].timer
+
+		cs.Require().NotEqual(oldTimer, newTimer, tc.desc)
 	}
 }
 

@@ -1,6 +1,6 @@
 package localcache
 
 type Cache interface {
-	Get(key string) (any, bool)
-	Set(key string, val any)
+	Get(key string) interface{}
+	Set(key string, val interface{})
 }
